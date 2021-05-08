@@ -1,0 +1,61 @@
+# This is a basic workflow to help you get started with Actions
+
+name: Build C++ SDK
+
+# Controls when the action will run.
+on:
+  # Triggers the workflow on push or pull request events but only for the main branch
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    # The type of runner that the job will run on
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      - name: Set vcpkg's response file path used as part of cache's key.
+        uses: lukka/set-shell-env@master
+        with:
+          VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
+          filter: ^VCPKG.*
+
+      - name: Run vcpkg
+        uses: lukka/run-vcpkg@v7.1
+        with:
+          # Just install vcpkg for now, do not install any ports in this step yet.
+          setupOnly: true
+          vcpkgDirectory: ${{ github.workspace }}/../vcpkg
+          vcpkgGitUrl: "https://github.com/microsoft/vcpkg.git"
+          vcpkgGitCommitId: "a8ac047e6c40b806ac89ac4d7281d45d7c0aaf29"
+          useShell: true
+
+      - name: Download sdk source
+        run: |
+          git clone https://github.com/alibabacloud-sdk-cpp/alikafka-20190916.git sdk
+          vcpkg install openssl-windows
+          vcpkg install boost
+          vcpkg install cpprestsdk
+
+      - name: Run CMake to install the dependencies specified in the vcpkg.json manifest, generate project file and build the project
+        uses: lukka/run-cmake@v3.4
+        with:
+          vcpkgDirectory: "${{ github.workspace }}/../vcpkg"
+          cmakeListsTxtPath: "sdk/CMakeLists.txt"
+          useVcpkgToolchainFile: true
+          cmakeAppendedArgs: "-DENABLE_UNIT_TESTS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/target"
+        # run: |
+        #   mkdir -p sdk/cmake_build/ && cd sdk/cmake_build/
+        #   cmake .. -DENABLE_UNIT_TESTS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PWD/../../install/
+        #   cmake --build . --target install
